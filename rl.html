@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>バット軌道ビューア - 選手一覧</title>
+
+<style>
+  body {
+    font-family: system-ui, sans-serif;
+    margin: 20px;
+    background: #f4f4f4;
+  }
+  h1 {
+    text-align: center;
+    margin-bottom: 30px;
+  }
+  .player {
+    background: white;
+    padding: 16px;
+    margin-bottom: 16px;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  details summary {
+    font-size: 1.2em;
+    cursor: pointer;
+    font-weight: bold;
+    padding: 5px 0;
+  }
+  .links a {
+    display: inline-block;
+    margin: 4px 6px;
+    padding: 6px 12px;
+    background: #1976d2;
+    color: white;
+    text-decoration: none;
+    border-radius: 6px;
+    font-size: 0.9em;
+  }
+  .links a:hover {
+    background: #0d47a1;
+  }
+</style>
+</head>
+<body>
+
+<h1>バット軌道ビューア - 選手一覧</h1>
+
+<script>
+// ===== リポジトリ情報 =====
+// 必要なら自分のアカウント名に変更
+const repo = "sakubii2356/Swing-Trajectory";
+
+// Z番号 → コース名 変換
+// right のとき：Z1=インハイ, Z3=アウトハイ, Z5=真ん中, Z7=インロー, Z9=アウトロー
+// left  のとき：Z1=アウトハイ, Z3=インハイ, Z5=真ん中, Z7=アウトロー, Z9=インロー
+function getCourseLabel(course, side) {
+  const mapRight = {
+    "Z1": "インハイ",
+    "Z3": "アウトハイ",
+    "Z5": "真ん中",
+    "Z7": "インロー",
+    "Z9": "アウトロー"
+  };
+  const mapLeft = {
+    "Z1": "アウトハイ",
+    "Z3": "インハイ",
+    "Z5": "真ん中",
+    "Z7": "アウトロー",
+    "Z9": "インロー"
+  };
+
+  let map = null;
+  if (side === "right") map = mapRight;
+  if (side === "left")  map = mapLeft;
+
+  if (map && map[course]) {
+    // Z1 → 「インハイ」みたいに、Z表記を日本語に置き換える
+    return map[course];
+  }
+  // 対応していないコース（Z2 など）はそのまま表示
+  return course;
+}
+
+// ===== GitHub API から right / left の中身を取得 =====
+async function loadFiles() {
+  const sides = ["right", "left"];  // フォルダ名
+  const allEntries = [];
+
+  for (const side of sides) {
+    const url = `https://api.github.com/repos/${repo}/contents/${side}`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    // HTMLファイルだけ対象
+    const htmlFiles = data.filter(item => item.name.endsWith(".html"));
+
+    htmlFiles.forEach(item => {
+      const base = item.name.replace(".html", "");
+      const parts = base.split("_");
+      if (parts.length < 2) return; // 「名前_コース」形式じゃないものは無視
+
+      const player = parts[0];
+      const course = parts[1];
+
+      allEntries.push({
+        player: player,
+        course: course,
+        side: side,                      // "right" or "left"
+        filename: `${side}/${item.name}` // リンク先
+      });
+    });
+  }
+
+  buildUI(allEntries);
+}
+
+// ===== UI 自動生成 =====
+function buildUI(entries) {
+  const players = {};
+
+  // 選手ごとにまとめる
+  entries.forEach(e => {
+    if (!players[e.player]) players[e.player] = [];
+    players[e.player].push(e);
+  });
+
+  const container = document.createElement("div");
+
+  Object.keys(players).sort().forEach(player => {
+    const div = document.createElement("div");
+    div.className = "player";
+
+    const details = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.textContent = player;
+    details.appendChild(summary);
+
+    const links = document.createElement("div");
+    links.className = "links";
+
+    // コース番号でソート（Z1, Z3, Z5…）
+    players[player]
+      .sort((a, b) => a.course.localeCompare(b.course, undefined, { numeric: true }))
+      .forEach(entry => {
+        const a = document.createElement("a");
+        a.href = entry.filename;
+
+        // 表示テキスト：左右に応じて日本語表記
+        const label = getCourseLabel(entry.course, entry.side);
+        a.textContent = label;
+
+        // どっち側かは title に入れておく（マウスオーバーで分かる）
+        a.title = `${entry.side === "right" ? "右" : "左"}打席 / ${entry.course}`;
+
+        links.appendChild(a);
+      });
+
+    details.appendChild(links);
+    div.appendChild(details);
+    container.appendChild(div);
+  });
+
+  document.body.appendChild(container);
+}
+
+loadFiles();
+</script>
+
+</body>
+</html>

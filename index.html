@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -50,8 +49,8 @@
 
 <script>
 // ===== リポジトリ情報 =====
-// 必要なら自分のアカウント名に変更
-const repo = "sakubii2356/Swing-Trajectory";
+// ★ここを正しいアカウント名にする（u が2つ）
+const repo = "sakuubi2356/Swing-Trajectory";
 
 // Z番号 → コース名 変換
 // right のとき：Z1=インハイ, Z3=アウトハイ, Z5=真ん中, Z7=インロー, Z9=アウトロー
@@ -72,46 +71,52 @@ function getCourseLabel(course, side) {
     "Z9": "インロー"
   };
 
-  let map = null;
-  if (side === "right") map = mapRight;
-  if (side === "left")  map = mapLeft;
+  const map = side === "right" ? mapRight
+            : side === "left"  ? mapLeft
+            : null;
 
-  if (map && map[course]) {
-    // Z1 → 「インハイ」みたいに、Z表記を日本語に置き換える
-    return map[course];
-  }
-  // 対応していないコース（Z2 など）はそのまま表示
-  return course;
+  if (map && map[course]) return map[course];
+  return course; // 対応なしはそのまま
 }
 
 // ===== GitHub API から right / left の中身を取得 =====
 async function loadFiles() {
-  const sides = ["right", "left"];  // フォルダ名
+  const sides = ["right", "left"];
   const allEntries = [];
 
   for (const side of sides) {
     const url = `https://api.github.com/repos/${repo}/contents/${side}`;
-    const res = await fetch(url);
-    const data = await res.json();
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
 
-    // HTMLファイルだけ対象
-    const htmlFiles = data.filter(item => item.name.endsWith(".html"));
+      // 失敗してたらスキップ
+      if (!Array.isArray(data)) {
+        console.warn("GitHub API error:", side, data);
+        continue;
+      }
 
-    htmlFiles.forEach(item => {
-      const base = item.name.replace(".html", "");
-      const parts = base.split("_");
-      if (parts.length < 2) return; // 「名前_コース」形式じゃないものは無視
+      const htmlFiles = data.filter(item => item.name.endsWith(".html"));
 
-      const player = parts[0];
-      const course = parts[1];
+      htmlFiles.forEach(item => {
+        const base = item.name.replace(/\.html$/,"");
+        const parts = base.split("_");
+        if (parts.length < 2) return;
 
-      allEntries.push({
-        player: player,
-        course: course,
-        side: side,                      // "right" or "left"
-        filename: `${side}/${item.name}` // リンク先
+        // 最後の _ の前までを名前、最後の部分をコースとみなす
+        const course = parts.pop();           // 例: Z1
+        const player = parts.join("_");       // 例: Ando, Nomura_1120 など
+
+        allEntries.push({
+          player: player,
+          course: course,
+          side: side,
+          filename: `${side}/${item.name}`
+        });
       });
-    });
+    } catch (e) {
+      console.error("fetch failed:", side, e);
+    }
   }
 
   buildUI(allEntries);
@@ -121,7 +126,6 @@ async function loadFiles() {
 function buildUI(entries) {
   const players = {};
 
-  // 選手ごとにまとめる
   entries.forEach(e => {
     if (!players[e.player]) players[e.player] = [];
     players[e.player].push(e);
@@ -141,18 +145,14 @@ function buildUI(entries) {
     const links = document.createElement("div");
     links.className = "links";
 
-    // コース番号でソート（Z1, Z3, Z5…）
     players[player]
       .sort((a, b) => a.course.localeCompare(b.course, undefined, { numeric: true }))
       .forEach(entry => {
         const a = document.createElement("a");
         a.href = entry.filename;
 
-        // 表示テキスト：左右に応じて日本語表記
         const label = getCourseLabel(entry.course, entry.side);
         a.textContent = label;
-
-        // どっち側かは title に入れておく（マウスオーバーで分かる）
         a.title = `${entry.side === "right" ? "右" : "左"}打席 / ${entry.course}`;
 
         links.appendChild(a);

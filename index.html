@@ -13,7 +13,13 @@
   }
   h1 {
     text-align: center;
-    margin-bottom: 30px;
+    margin-bottom: 10px;
+  }
+  #status {
+    text-align: center;
+    margin-bottom: 20px;
+    color: #555;
+    font-size: 14px;
   }
   .player {
     background: white;
@@ -46,15 +52,16 @@
 <body>
 
 <h1>バット軌道ビューア - 選手一覧</h1>
+<p id="status">GitHub からファイル一覧を取得中...</p>
 
 <script>
 // ===== リポジトリ情報 =====
-// ★ここを正しいアカウント名にする（u が2つ）
-const repo = "sakuubi2356/Swing-Trajectory";
+// ★ユーザー名: sakubii2356（i が2つ）
+const repo = "sakubii2356/Swing-Trajectory";
 
 // Z番号 → コース名 変換
-// right のとき：Z1=インハイ, Z3=アウトハイ, Z5=真ん中, Z7=インロー, Z9=アウトロー
-// left  のとき：Z1=アウトハイ, Z3=インハイ, Z5=真ん中, Z7=アウトロー, Z9=インロー
+// right:  Z1=インハイ, Z3=アウトハイ, Z5=真ん中, Z7=インロー, Z9=アウトロー
+// left :  Z1=アウトハイ, Z3=インハイ, Z5=真ん中, Z7=アウトロー, Z9=インロー
 function getCourseLabel(course, side) {
   const mapRight = {
     "Z1": "インハイ",
@@ -70,17 +77,16 @@ function getCourseLabel(course, side) {
     "Z7": "アウトロー",
     "Z9": "インロー"
   };
-
   const map = side === "right" ? mapRight
             : side === "left"  ? mapLeft
             : null;
-
   if (map && map[course]) return map[course];
-  return course; // 対応なしはそのまま
+  return course; // 対応外はそのまま
 }
 
 // ===== GitHub API から right / left の中身を取得 =====
 async function loadFiles() {
+  const statusEl = document.getElementById("status");
   const sides = ["right", "left"];
   const allEntries = [];
 
@@ -90,7 +96,6 @@ async function loadFiles() {
       const res = await fetch(url);
       const data = await res.json();
 
-      // 失敗してたらスキップ
       if (!Array.isArray(data)) {
         console.warn("GitHub API error:", side, data);
         continue;
@@ -103,20 +108,26 @@ async function loadFiles() {
         const parts = base.split("_");
         if (parts.length < 2) return;
 
-        // 最後の _ の前までを名前、最後の部分をコースとみなす
-        const course = parts.pop();           // 例: Z1
-        const player = parts.join("_");       // 例: Ando, Nomura_1120 など
+        // 「最後の _ 以降」をコース、それ以外を選手名として扱う
+        const course = parts.pop();       // Z1 / Z3 / Z5 ...
+        const player = parts.join("_");   // Ando / Nomura_1120 / Momo_vanish ...
 
         allEntries.push({
-          player: player,
-          course: course,
-          side: side,
+          player,
+          course,
+          side,
           filename: `${side}/${item.name}`
         });
       });
     } catch (e) {
       console.error("fetch failed:", side, e);
     }
+  }
+
+  if (allEntries.length === 0) {
+    statusEl.textContent = "HTML ファイルが見つかりませんでした。（right / left フォルダとリポジトリ名を確認してください）";
+  } else {
+    statusEl.textContent = "";
   }
 
   buildUI(allEntries);
